@@ -16,6 +16,7 @@ An interactive Bash script for managing multiple Docker Compose projects from a 
 - **Docker** and **Docker Compose** installed
 - **tree** command (`sudo apt install tree` on Debian/Ubuntu)
 - **dops** (optional, for enhanced container display)
+- - https://github.com/Mikescher/better-docker-ps
 
 ## Installation
 
