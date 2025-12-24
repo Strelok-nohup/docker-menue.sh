@@ -71,7 +71,6 @@ done
 function check_dependencies {
     command -v tree >/dev/null 2>&1 || { echo "tree is not installed"; exit 1; }
     command -v docker >/dev/null 2>&1 || { echo "docker is not installed"; exit 1; }
-    #command -v compose >/dev/null 2>&1 || { echo "docker compose is not installed"; exit 1; }
     command -v dops >/dev/null 2>&1 || { echo "dops is not installed, defaulting to display docker ps -a"; docker_display="docker ps -a"; }
 }
 
