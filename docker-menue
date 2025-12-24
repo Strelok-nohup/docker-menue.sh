@@ -1,0 +1,163 @@
+#!/bin/bash
+#
+# docker-menue - Interactive Docker Compose management tool
+#
+# Copyright (c) 2025 Domke
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+
+
+set -euo pipefail
+
+# Defaults and temporary variables
+compose_name="docker-compose.yml"
+compose_location="/home/$USER/Desktop/containers"
+docker_display=dops
+
+# Parse parameters
+while getopts "l:n:h12" opt; do
+    case "$opt" in
+        l)
+            echo "Location parameter: $OPTARG"
+            compose_location=$OPTARG
+            ;;
+        n)
+            echo "Compose file name parameter: $OPTARG"
+            compose_name=$OPTARG
+            ;;
+        h)
+            echo ""
+            echo "Usage: $0 [-l directory] [-n filename] [-1|-2] [-h]"
+            echo ""
+            echo "-h = Display this help message."
+            echo "-l = Change location to search in; must be a directory containing folders with docker compose YAML files."
+            echo "-n = Change the docker compose.yml file name to search for."
+            echo "-1 = Use <dops> for initial display of running containers (default)."
+            echo "-2 = Use <docker ps -a> for initial display of running containers."
+            exit 0
+            ;;
+        1)
+            echo "== Using dops for displaying running containers =="
+            docker_display="dops"
+            ;;
+        2)
+            echo "== Using docker ps -a for displaying running containers =="
+            docker_display="docker"
+            ;;
+        *)
+            exit 1
+            ;;
+    esac
+done
+
+# Check if Docker and dependencies are installed
+function check_dependencies {
+    command -v tree >/dev/null 2>&1 || { echo "tree is not installed"; exit 1; }
+    command -v docker >/dev/null 2>&1 || { echo "docker is not installed"; exit 1; }
+    #command -v compose >/dev/null 2>&1 || { echo "docker compose is not installed"; exit 1; }
+    command -v dops >/dev/null 2>&1 || { echo "dops is not installed, defaulting to display docker ps -a"; docker_display="docker ps -a"; }
+}
+
+# Show currently running Docker containers
+case "$docker_display" in
+    dops)
+        dops
+        ;;
+    docker)
+        docker ps -a
+        ;;
+esac
+
+readarray -t folders < <(tree $compose_location -i -f -d -L 1)
+
+# Remove the first and last two lines of tree output (hack)
+unset folders[0]
+unset folders[-1]
+unset folders[-1]
+
+# Search in folders for docker compose.yml
+function search_folder {
+    for i in "${folders[@]}"; do
+        if [[ -e "$i/$compose_name" ]]; then
+            tmp_array_found+=("$i")
+        else
+            tmp_array_notfound+=("$i")
+        fi
+    done
+}
+
+# Ask user whether to bring up or down docker compose
+function upordown {
+    read -p "Do you want to (u)p or (d)own docker compose? " ud_choice
+    case $ud_choice in
+        u|U)
+            echo "up"
+            ;;
+        d|D)
+            echo "down"
+            ;;
+        *)
+            echo "Invalid choice"
+            ;;
+    esac
+}
+
+# Execute docker compose up or down
+function use_compose {
+    if [[ ${#tmp_array_found[@]} -eq 0 ]]; then
+        echo "No matching compose file found in $compose_location with name $compose_name"
+        echo "Exiting script now... (っ˘̩╭╮˘̩)っ"
+        exit 0
+    fi
+    echo "Choose a folder to start/stop docker-compose:"
+    max_count=${#tmp_array_found[@]}
+    max_countminus1=$(($max_count-1))
+    for i in "${!tmp_array_found[@]}"; do
+        if [[ $i == 0 ]]; then
+            echo "-------------------------------------"
+        fi
+        count=$((i+1))
+        folder_basename=$(basename "${tmp_array_found[$i]}")
+        echo "$count $folder_basename"
+        if [[ $i == $max_countminus1 ]]; then
+            echo "-------------------------------------"
+            read -p "Enter your choice: " choice
+            if [[ $choice -gt 0 && $choice -le $max_count ]]; then
+                selected_folder=${tmp_array_found[$((choice-1))]}
+                echo "Starting docker compose in folder: $selected_folder"
+                cd "$selected_folder" || { echo "Failed to enter directory"; return 1; }
+                if [[ $1 == "up" ]]; then
+                    docker compose up -d
+                elif [[ $1 == "down" ]]; then
+                    docker compose down
+                else
+                    echo "Oh boy, something went wrong."
+                fi
+            else
+                echo "Invalid choice"
+            fi
+        fi
+    done
+}
+
+check_dependencies
+search_folder
+tmp=$(upordown)
+use_compose "$tmp"
